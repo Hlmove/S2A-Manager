@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         S2A Manager (Web Version)
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  管理 sub2api 的账号、代理与 JSON 转换（CPA 悬浮面板样式）
 // @author       Trae AI
 // @match        *://*/*
@@ -11,7 +11,7 @@
 // @connect      *
 // ==/UserScript==
 
-(function() {
+(async function() {
     'use strict';
 
     // --------------------------------------------------------
@@ -119,7 +119,7 @@
     });
 
     // 内部 HTML 结构
-    panel.innerHTML = \`
+    panel.innerHTML = `
         <div style="font-size: 16px; font-weight: 800; margin-bottom: 12px; display: flex; justify-content: space-between;">
             <span>🚀 S2A Manager</span>
             <span style="font-size: 12px; font-weight: normal; opacity: 0.8; cursor:pointer;" id="s2a-auto-token">🔄 尝试自动抓取 Token</span>
@@ -205,7 +205,39 @@
         </div>
 
         <div id="s2a-log" style="margin-top: 12px; font-size: 11px; font-family: monospace; opacity: 0.8; height: 60px; overflow-y: auto; word-break: break-all; white-space: pre-wrap;">等待操作...</div>
-    \`;
+    `;
+
+    function probeUrl(path) {
+        return new Promise((resolve) => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: `${window.location.origin}${path}`,
+                headers: {
+                    accept: 'application/json, text/plain, */*',
+                },
+                timeout: 2500,
+                onload: (resp) => resolve(resp.status || 0),
+                ontimeout: () => resolve(0),
+                onerror: () => resolve(0),
+            });
+        });
+    }
+
+    async function shouldActivate() {
+        const candidates = ['/admin/accounts', '/api/v1/admin/accounts'];
+        for (const path of candidates) {
+            const status = await probeUrl(path);
+            if (status && status !== 404) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    const active = await shouldActivate();
+    if (!active) {
+        return;
+    }
 
     document.body.appendChild(panel);
     document.body.appendChild(toggleBtn);
@@ -312,10 +344,10 @@
     // 标签切换
     ui.tabs.forEach(tab => {
         tab.addEventListener('click', () => {
-            ui.tabs.forEach(t => {
-                t.style.border = '1px solid transparent';
-                t.style.background = 'transparent';
-                t.style.color = t.panelText;
+            ui.tabs.forEach(btn => {
+                btn.style.border = '1px solid transparent';
+                btn.style.background = 'transparent';
+                btn.style.color = t.panelText;
             });
             ui.panels.forEach(p => p.classList.remove('active'));
             
@@ -352,18 +384,14 @@
     });
 
     // 保存配置
-    document.getElementById('btn-save-config').addEventListener('click', () => {
+    document.getElementById('btn-save-config').addEventListener('click', async () => {
         GM_setValue('s2a_baseUrl', ui.baseUrl.value);
         GM_setValue('s2a_apiKey', ui.apiKey.value);
         log('✅ 配置已保存到本地存储。');
-    });
-
-    // 测试连接
-    document.getElementById('btn-test-conn').addEventListener('click', async () => {
         log('正在测试连接...');
         try {
-            const res = await s2aFetch('/admin/settings/admin-api-key');
-            log(`✅ 连接成功！(当前 Admin Key 有效)`);
+            await s2aFetch('/admin/accounts?limit=1');
+            log('✅ 连接成功！');
         } catch (e) {
             log(`❌ 连接失败: ${e.message}`);
         }
