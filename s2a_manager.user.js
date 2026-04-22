@@ -566,4 +566,44 @@
         }
     });
 
+    // --------------------------------------------------------
+    // 7. 初始化与触发逻辑 (参考 CPA)
+    // --------------------------------------------------------
+
+    function createSidebar() {
+        if (document.getElementById('__s2a_universal_panel')) return;
+        
+        document.body.appendChild(panel);
+        document.body.appendChild(toggleBtn);
+        log('✅ 成功匹配 sub2api 接口，面板已加载。');
+    }
+
+    function init() {
+        // 探测是否为 sub2api 环境
+        const checkUrl = getBaseUrl() + '/admin/accounts?limit=1';
+        
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: checkUrl,
+            headers: getAuthHeaders(),
+            onload: function(response) {
+                // 只要不是 404，或者能返回正常的 sub2api 格式，就认为是目标站点
+                if (response.status !== 404 && response.status !== 0) {
+                    if (document.readyState === "loading") {
+                        document.addEventListener("DOMContentLoaded", createSidebar, { once: true });
+                    } else {
+                        createSidebar();
+                    }
+                } else {
+                    console.log("[S2A Manager] Not a sub2api environment (404 on /admin/accounts). Script will not load.");
+                }
+            },
+            onerror: function() {
+                console.log("[S2A Manager] Network error while detecting sub2api environment.");
+            }
+        });
+    }
+
+    init();
+
 })();
