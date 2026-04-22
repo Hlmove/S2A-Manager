@@ -1,14 +1,13 @@
 // ==UserScript==
 // @name         S2A Manager (Web Version)
 // @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  管理 sub2api 的账号、代理与 JSON 转换（可视化面板）
+// @version      0.2
+// @description  管理 sub2api 的账号、代理与 JSON 转换（CPA 悬浮面板样式）
 // @author       Trae AI
 // @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @grant        GM_addStyle
 // @connect      *
 // ==/UserScript==
 
@@ -16,227 +15,209 @@
     'use strict';
 
     // --------------------------------------------------------
-    // 1. 样式与基础 UI 注入 (CSS & UI Base)
+    // 1. 样式与基础 UI 注入 (CPA 拟物化高斯模糊风格)
     // --------------------------------------------------------
-    GM_addStyle(`
-        #s2a-app {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 400px;
-            height: 600px;
-            background: #fff;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border-radius: 8px;
-            z-index: 999999;
-            display: flex;
-            flex-direction: column;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-size: 14px;
-            color: #333;
-            border: 1px solid #e8e8e8;
-            transition: transform 0.3s ease;
+    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    
+    // CPA 主题配色
+    const theme = {
+        dark: {
+            panelBg: "linear-gradient(152deg, rgba(64, 62, 58, 0.76), rgba(32, 33, 38, 0.82))",
+            panelBorder: "1px solid rgba(228, 217, 204, 0.22)",
+            panelShadow: "0 16px 42px rgba(10, 10, 14, 0.35)",
+            panelText: "#f4f0e9",
+            softBg: "rgba(37, 39, 44, 0.62)",
+            softBorder: "1px solid rgba(223,214,204,0.18)",
+            btnQueryBg: "linear-gradient(135deg, rgba(83, 105, 139, 0.92), rgba(71, 90, 120, 0.94))",
+            btnDeleteBg: "linear-gradient(135deg, rgba(148, 86, 92, 0.94), rgba(124, 72, 84, 0.94))",
+            btnBorder: "1px solid rgba(225,216,205,0.2)",
+            btnText: "#fff9f1",
+            inputBg: "rgba(23, 24, 28, 0.42)",
+            inputBorder: "1px solid rgba(223,214,204,0.18)",
+            toggleBg: "linear-gradient(145deg, rgba(86, 88, 99, 0.9), rgba(60, 62, 72, 0.92))",
+            toggleText: "#f4efe8"
+        },
+        light: {
+            panelBg: "linear-gradient(156deg, rgba(255, 252, 246, 0.9), rgba(244, 241, 236, 0.92))",
+            panelBorder: "1px solid rgba(165, 156, 144, 0.42)",
+            panelShadow: "0 14px 30px rgba(126, 119, 108, 0.18)",
+            panelText: "#2d2a26",
+            softBg: "rgba(255, 251, 245, 0.86)",
+            softBorder: "1px solid rgba(171, 163, 152, 0.28)",
+            btnQueryBg: "linear-gradient(135deg, rgba(102, 134, 176, 0.92), rgba(84, 113, 155, 0.92))",
+            btnDeleteBg: "linear-gradient(135deg, rgba(198, 111, 121, 0.92), rgba(171, 91, 103, 0.92))",
+            btnBorder: "1px solid rgba(127, 119, 109, 0.24)",
+            btnText: "#fffdf9",
+            inputBg: "rgba(255, 254, 250, 0.74)",
+            inputBorder: "1px solid rgba(171, 163, 152, 0.35)",
+            toggleBg: "linear-gradient(145deg, rgba(251, 250, 247, 0.96), rgba(239, 236, 230, 0.94))",
+            toggleText: "#5d6273"
         }
-        #s2a-app.collapsed {
-            transform: translateY(calc(100% - 40px));
-        }
-        #s2a-header {
-            padding: 10px 15px;
-            background: #fafafa;
-            border-bottom: 1px solid #e8e8e8;
-            border-radius: 8px 8px 0 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        #s2a-header:hover {
-            background: #f0f0f0;
-        }
-        .s2a-tabs {
-            display: flex;
-            border-bottom: 1px solid #e8e8e8;
-            background: #fafafa;
-        }
-        .s2a-tab {
-            flex: 1;
-            text-align: center;
-            padding: 8px 0;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            font-size: 13px;
-        }
-        .s2a-tab.active {
-            color: #1890ff;
-            border-bottom: 2px solid #1890ff;
-            background: #fff;
-        }
-        .s2a-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            background: #fff;
-            border-radius: 0 0 8px 8px;
-        }
-        .s2a-panel {
-            display: none;
-        }
-        .s2a-panel.active {
-            display: block;
-        }
-        .s2a-form-group {
-            margin-bottom: 12px;
-        }
-        .s2a-form-group label {
-            display: block;
-            margin-bottom: 4px;
-            font-weight: 500;
-            font-size: 13px;
-        }
-        .s2a-form-group input[type="text"],
-        .s2a-form-group input[type="password"],
-        .s2a-form-group select {
-            width: 100%;
-            padding: 6px;
-            border: 1px solid #d9d9d9;
-            border-radius: 4px;
-            box-sizing: border-box;
-            font-size: 13px;
-        }
-        .s2a-btn {
-            padding: 6px 12px;
-            background: #1890ff;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            margin-right: 8px;
-            margin-bottom: 8px;
-        }
-        .s2a-btn:hover {
-            background: #40a9ff;
-        }
-        .s2a-btn-danger {
-            background: #ff4d4f;
-        }
-        .s2a-btn-danger:hover {
-            background: #ff7875;
-        }
-        .s2a-log {
-            margin-top: 10px;
-            padding: 8px;
-            background: #f5f5f5;
-            border: 1px solid #d9d9d9;
-            border-radius: 4px;
-            height: 120px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-            white-space: pre-wrap;
-        }
-        .s2a-hr {
-            border: none;
-            border-top: 1px solid #e8e8e8;
-            margin: 15px 0;
-        }
-    `);
+    };
+    const t = isDark ? theme.dark : theme.light;
 
-    const appHTML = `
-        <div id="s2a-app" class="collapsed">
-            <div id="s2a-header">
-                <span>🚀 S2A Manager (Web)</span>
-                <span id="s2a-toggle">▲ 展开</span>
-            </div>
-            <div class="s2a-tabs">
-                <div class="s2a-tab active" data-target="panel-config">⚙️ 配置</div>
-                <div class="s2a-tab" data-target="panel-account">👥 账号</div>
-                <div class="s2a-tab" data-target="panel-proxy">🌐 代理</div>
-                <div class="s2a-tab" data-target="panel-convert">🔀 转换</div>
-            </div>
-            <div class="s2a-content">
-                <!-- 1. 配置面板 -->
-                <div id="panel-config" class="s2a-panel active">
-                    <div class="s2a-form-group">
-                        <label>网站 API 地址 (例如 http://127.0.0.1:8080)</label>
-                        <input type="text" id="s2a-baseUrl" placeholder="输入 sub2api 地址">
-                    </div>
-                    <div class="s2a-form-group">
-                        <label>管理员 API Key</label>
-                        <input type="password" id="s2a-apiKey" placeholder="输入 Admin API Key">
-                    </div>
-                    <button class="s2a-btn" id="btn-save-config">💾 保存配置</button>
-                    <button class="s2a-btn" id="btn-test-conn">🔗 测试连接</button>
-                </div>
-
-                <!-- 2. 账号面板 -->
-                <div id="panel-account" class="s2a-panel">
-                    <div class="s2a-form-group">
-                        <label>📥 导入账号 JSON</label>
-                        <input type="file" id="file-import-account" accept=".json" multiple>
-                    </div>
-                    <button class="s2a-btn" id="btn-import-account">开始导入</button>
-
-                    <hr class="s2a-hr">
-                    <div class="s2a-form-group">
-                        <label>📤 导出现有账号</label>
-                        <button class="s2a-btn" id="btn-export-account">下载全部账号 (JSON)</button>
-                    </div>
-
-                    <hr class="s2a-hr">
-                    <div class="s2a-form-group">
-                        <label>🛠️ 账号检测与清理</label>
-                        <button class="s2a-btn s2a-btn-danger" id="btn-detect-401">检测并清除失效(401/403)</button>
-                    </div>
-                </div>
-
-                <!-- 3. 代理面板 -->
-                <div id="panel-proxy" class="s2a-panel">
-                    <div class="s2a-form-group">
-                        <label>📥 导入代理 JSON</label>
-                        <input type="file" id="file-import-proxy" accept=".json">
-                    </div>
-                    <button class="s2a-btn" id="btn-import-proxy">开始导入</button>
-
-                    <hr class="s2a-hr">
-                    <div class="s2a-form-group">
-                        <label>🗑️ 清理代理</label>
-                        <button class="s2a-btn s2a-btn-danger" id="btn-clear-proxies">清空所有代理</button>
-                    </div>
-                </div>
-
-                <!-- 4. 转换面板 -->
-                <div id="panel-convert" class="s2a-panel">
-                    <div class="s2a-form-group">
-                        <label>🔀 转换简易 JSON 为标准 S2A 格式</label>
-                        <input type="file" id="file-convert" accept=".json" multiple>
-                    </div>
-                    <button class="s2a-btn" id="btn-convert">转换并下载</button>
-                    <div style="font-size:12px; color:#666; margin-top:8px;">
-                        自动识别 token, access_token, session_token 等凭证字段。
-                    </div>
-                </div>
-
-                <!-- 公共日志区 -->
-                <div class="s2a-log" id="s2a-log">就绪...</div>
-            </div>
-        </div>
+    // 创建主面板
+    const panel = document.createElement("div");
+    panel.id = "__s2a_universal_panel";
+    panel.style.cssText = `
+        position: fixed;
+        z-index: 99999;
+        right: 16px;
+        top: 70px;
+        width: 380px;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        backdrop-filter: blur(18px) saturate(120%);
+        border-radius: 20px;
+        padding: 16px;
+        box-sizing: border-box;
+        overflow: hidden;
+        will-change: transform;
+        transition: transform 0.26s ease, opacity 0.22s ease;
+        font-family: 'MiSans', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei UI', sans-serif;
+        transform-origin: right top;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateX(calc(100% + 24px)) scale(0.985);
+        background: ${t.panelBg};
+        border: ${t.panelBorder};
+        box-shadow: ${t.panelShadow};
+        color: ${t.panelText};
     `;
 
-    const container = document.createElement('div');
-    container.innerHTML = appHTML;
-    document.body.appendChild(container);
+    // 创建切换按钮
+    const toggleBtn = document.createElement("button");
+    toggleBtn.textContent = "展开 S2A";
+    toggleBtn.style.cssText = `
+        position: fixed;
+        z-index: 100000;
+        right: 16px;
+        bottom: 16px;
+        border-radius: 999px;
+        padding: 9px 13px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        backdrop-filter: blur(10px);
+        transition: transform 0.2s ease;
+        background: ${t.toggleBg};
+        color: ${t.toggleText};
+        border: 1px solid rgba(164, 156, 145, 0.48);
+        box-shadow: 0 8px 18px rgba(136, 129, 118, 0.2);
+    `;
+
+    let isOpen = false;
+    toggleBtn.addEventListener("click", () => {
+        isOpen = !isOpen;
+        toggleBtn.textContent = isOpen ? "收起 S2A" : "展开 S2A";
+        panel.style.opacity = isOpen ? "1" : "0";
+        panel.style.visibility = isOpen ? "visible" : "hidden";
+        panel.style.pointerEvents = isOpen ? "auto" : "none";
+        panel.style.transform = isOpen ? "translateX(0) scale(1)" : "translateX(calc(100% + 24px)) scale(0.985)";
+    });
+
+    // 内部 HTML 结构
+    panel.innerHTML = \`
+        <div style="font-size: 16px; font-weight: 800; margin-bottom: 12px; display: flex; justify-content: space-between;">
+            <span>🚀 S2A Manager</span>
+            <span style="font-size: 12px; font-weight: normal; opacity: 0.8; cursor:pointer;" id="s2a-auto-token">🔄 尝试自动抓取 Token</span>
+        </div>
+        
+        <div style="display: flex; gap: 6px; margin-bottom: 12px; background: \${t.softBg}; border: \${t.softBorder}; padding: 4px; border-radius: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);">
+            <button class="s2a-tab" data-target="config" style="flex: 1; padding: 7px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; border: \${t.btnBorder}; background: \${t.btnQueryBg}; color: \${t.btnText};">⚙️ 配置</button>
+            <button class="s2a-tab" data-target="account" style="flex: 1; padding: 7px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid transparent; background: transparent; color: \${t.panelText};">👥 账号</button>
+            <button class="s2a-tab" data-target="proxy" style="flex: 1; padding: 7px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid transparent; background: transparent; color: \${t.panelText};">🌐 代理</button>
+            <button class="s2a-tab" data-target="convert" style="flex: 1; padding: 7px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid transparent; background: transparent; color: \${t.panelText};">🔀 转换</button>
+        </div>
+
+        <div style="flex: 1; overflow-y: auto; background: \${t.inputBg}; border: \${t.inputBorder}; border-radius: 16px; padding: 12px; min-height: 280px; max-height: 400px; scrollbar-width: thin;">
+            <style>
+                .s2a-panel-content { display: none; flex-direction: column; gap: 12px; }
+                .s2a-panel-content.active { display: flex; }
+                .s2a-input { width: 100%; padding: 8px 10px; border-radius: 8px; border: \${t.inputBorder}; background: \${t.panelBg}; color: \${t.panelText}; font-size: 12px; box-sizing: border-box; outline: none; }
+                .s2a-label { font-size: 11px; font-weight: 600; margin-bottom: 4px; display: block; opacity: 0.9; }
+                .s2a-btn-action { padding: 10px 14px; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: 700; transition: transform 0.2s ease; border: \${t.btnBorder}; color: \${t.btnText}; width: 100%; }
+                .s2a-btn-action:hover { transform: translateY(-1px); }
+                .s2a-btn-query { background: \${t.btnQueryBg}; }
+                .s2a-btn-danger { background: \${t.btnDeleteBg}; }
+            </style>
+            
+            <!-- 1. 配置面板 -->
+            <div id="panel-config" class="s2a-panel-content active">
+                <div>
+                    <label class="s2a-label">网站 API 地址</label>
+                    <input type="text" id="s2a-baseUrl" class="s2a-input" placeholder="例如 https://sub.example.com">
+                </div>
+                <div>
+                    <label class="s2a-label">管理员 API Key / Token</label>
+                    <input type="password" id="s2a-apiKey" class="s2a-input" placeholder="输入 Admin API Key 或 Bearer Token">
+                </div>
+                <button class="s2a-btn-action s2a-btn-query" id="btn-save-config">💾 保存配置 & 测试连接</button>
+            </div>
+
+            <!-- 2. 账号面板 -->
+            <div id="panel-account" class="s2a-panel-content">
+                <div>
+                    <label class="s2a-label">📥 批量导入账号 JSON</label>
+                    <input type="file" id="file-import-account" class="s2a-input" accept=".json" multiple>
+                    <button class="s2a-btn-action s2a-btn-query" id="btn-import-account" style="margin-top: 8px;">开始导入</button>
+                </div>
+                <hr style="border: none; border-top: \${t.inputBorder}; margin: 4px 0;">
+                <div>
+                    <label class="s2a-label">📤 导出现有账号</label>
+                    <button class="s2a-btn-action s2a-btn-query" id="btn-export-account">下载全部账号 (JSON)</button>
+                </div>
+                <hr style="border: none; border-top: \${t.inputBorder}; margin: 4px 0;">
+                <div>
+                    <label class="s2a-label">🛠️ 账号清理</label>
+                    <button class="s2a-btn-action s2a-btn-danger" id="btn-detect-401">一键检测并清除失效账号</button>
+                </div>
+            </div>
+
+            <!-- 3. 代理面板 -->
+            <div id="panel-proxy" class="s2a-panel-content">
+                <div>
+                    <label class="s2a-label">📥 导入代理 JSON</label>
+                    <input type="file" id="file-import-proxy" class="s2a-input" accept=".json">
+                    <button class="s2a-btn-action s2a-btn-query" id="btn-import-proxy" style="margin-top: 8px;">开始导入</button>
+                </div>
+                <hr style="border: none; border-top: \${t.inputBorder}; margin: 4px 0;">
+                <div>
+                    <label class="s2a-label">🗑️ 清理代理</label>
+                    <button class="s2a-btn-action s2a-btn-danger" id="btn-clear-proxies">清空所有代理</button>
+                </div>
+            </div>
+
+            <!-- 4. 转换面板 -->
+            <div id="panel-convert" class="s2a-panel-content">
+                <div>
+                    <label class="s2a-label">🔀 转换简易 JSON 为标准格式</label>
+                    <input type="file" id="file-convert" class="s2a-input" accept=".json" multiple>
+                    <button class="s2a-btn-action s2a-btn-query" id="btn-convert" style="margin-top: 8px;">转换并在本地下载</button>
+                </div>
+                <div style="font-size:10px; opacity:0.7; line-height: 1.4;">
+                    纯本地操作，不请求服务器。<br>
+                    自动识别 token, access_token, api_key 等提取到 credentials 中。
+                </div>
+            </div>
+        </div>
+
+        <div id="s2a-log" style="margin-top: 12px; font-size: 11px; font-family: monospace; opacity: 0.8; height: 60px; overflow-y: auto; word-break: break-all; white-space: pre-wrap;">等待操作...</div>
+    \`;
+
+    document.body.appendChild(panel);
+    document.body.appendChild(toggleBtn);
 
     // --------------------------------------------------------
     // 2. 核心状态与通用函数 (Core State & Utils)
     // --------------------------------------------------------
     const ui = {
-        app: document.getElementById('s2a-app'),
-        toggle: document.getElementById('s2a-toggle'),
-        header: document.getElementById('s2a-header'),
+        app: document.getElementById('__s2a_universal_panel'),
+        toggle: toggleBtn,
         tabs: document.querySelectorAll('.s2a-tab'),
-        panels: document.querySelectorAll('.s2a-panel'),
+        panels: document.querySelectorAll('.s2a-panel-content'),
         baseUrl: document.getElementById('s2a-baseUrl'),
         apiKey: document.getElementById('s2a-apiKey'),
         log: document.getElementById('s2a-log')
@@ -328,20 +309,46 @@
     ui.baseUrl.value = GM_getValue('s2a_baseUrl', 'http://127.0.0.1:8080');
     ui.apiKey.value = GM_getValue('s2a_apiKey', '');
 
-    // 展开/收起
-    ui.header.addEventListener('click', () => {
-        ui.app.classList.toggle('collapsed');
-        ui.toggle.innerText = ui.app.classList.contains('collapsed') ? '▲ 展开' : '▼ 收起';
-    });
-
     // 标签切换
     ui.tabs.forEach(tab => {
         tab.addEventListener('click', () => {
-            ui.tabs.forEach(t => t.classList.remove('active'));
+            ui.tabs.forEach(t => {
+                t.style.border = '1px solid transparent';
+                t.style.background = 'transparent';
+                t.style.color = t.panelText;
+            });
             ui.panels.forEach(p => p.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById(tab.dataset.target).classList.add('active');
+            
+            tab.style.border = t.btnBorder;
+            tab.style.background = t.btnQueryBg;
+            tab.style.color = t.btnText;
+            
+            document.getElementById('panel-' + tab.dataset.target).classList.add('active');
         });
+    });
+
+    // 尝试自动获取 Token
+    document.getElementById('s2a-auto-token').addEventListener('click', () => {
+        log('正在尝试从当前环境提取 Token...');
+        const keys = [
+            'admin_key', 'management_token', 'management_key', 
+            'auth_token', 'tm_token', 'tm_auth_token', 'tm_last_bearer_token_v1'
+        ];
+        
+        let found = null;
+        for (const k of keys) {
+            try {
+                found = localStorage.getItem(k) || sessionStorage.getItem(k);
+                if (found && found.trim()) break;
+            } catch(e) {}
+        }
+        
+        if (found) {
+            ui.apiKey.value = found.trim();
+            log('✅ 成功提取到 Token，已自动填入。');
+        } else {
+            log('⚠️ 未在当前页面缓存中找到 Admin Token，请手动填写。');
+        }
     });
 
     // 保存配置
