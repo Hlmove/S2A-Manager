@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         S2A Manager (Web Version)
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4
 // @description  管理 sub2api 的账号、代理与 JSON 转换（CPA 悬浮面板样式）
 // @author       Trae AI
-// @match        *://*/ui*
+// @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -331,8 +331,8 @@
     document.getElementById('s2a-auto-token').addEventListener('click', () => {
         log('正在尝试从当前环境提取 Token...');
         const keys = [
-            'admin_key', 'management_token', 'management_key', 
-            'auth_token', 'tm_token', 'tm_auth_token', 'tm_last_bearer_token_v1'
+            'auth_token', 'admin_key', 'management_token', 'management_key', 
+            'tm_token', 'tm_auth_token', 'tm_last_bearer_token_v1'
         ];
         
         let found = null;
