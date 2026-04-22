@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         S2A Manager (Web Version)
 // @namespace    http://tampermonkey.net/
-// @version      0.2
+// @version      0.3
 // @description  管理 sub2api 的账号、代理与 JSON 转换（CPA 悬浮面板样式）
 // @author       Trae AI
-// @match        *://*/*
+// @match        *://*/ui*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
