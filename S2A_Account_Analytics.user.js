@@ -16,41 +16,43 @@
     'use strict';
 
     // --------------------------------------------------------
-    // 1. 样式与基础 UI 注入 (CPA 拟物化高斯模糊风格)
+    // 1. 样式与基础 UI 注入 (适配 sub2api 原站风格)
     // --------------------------------------------------------
     const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     
-    // CPA 主题配色
+    // sub2api 现代化面板配色 (去除拟物化，采用扁平与毛玻璃结合的现代风)
     const theme = {
         dark: {
-            panelBg: "linear-gradient(152deg, rgba(64, 62, 58, 0.76), rgba(32, 33, 38, 0.82))",
-            panelBorder: "1px solid rgba(228, 217, 204, 0.22)",
-            panelShadow: "0 16px 42px rgba(10, 10, 14, 0.35)",
-            panelText: "#f4f0e9",
-            softBg: "rgba(37, 39, 44, 0.62)",
-            softBorder: "1px solid rgba(223,214,204,0.18)",
-            btnQueryBg: "linear-gradient(135deg, rgba(83, 105, 139, 0.92), rgba(71, 90, 120, 0.94))",
-            btnBorder: "1px solid rgba(225,216,205,0.2)",
-            btnText: "#fff9f1",
-            inputBg: "rgba(23, 24, 28, 0.42)",
-            inputBorder: "1px solid rgba(223,214,204,0.18)",
-            toggleBg: "linear-gradient(145deg, rgba(86, 88, 99, 0.9), rgba(60, 62, 72, 0.92))",
-            toggleText: "#f4efe8"
+            panelBg: "rgba(30, 30, 30, 0.85)",
+            panelBorder: "1px solid rgba(255, 255, 255, 0.1)",
+            panelShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+            panelText: "#e5e7eb",
+            softBg: "rgba(255, 255, 255, 0.05)",
+            softBorder: "1px solid rgba(255, 255, 255, 0.08)",
+            btnQueryBg: "#3b82f6", // 蓝色主色调
+            btnQueryHover: "#2563eb",
+            btnBorder: "none",
+            btnText: "#ffffff",
+            inputBg: "rgba(0, 0, 0, 0.2)",
+            inputBorder: "1px solid rgba(255, 255, 255, 0.1)",
+            toggleBg: "#3b82f6",
+            toggleText: "#ffffff"
         },
         light: {
-            panelBg: "linear-gradient(156deg, rgba(255, 252, 246, 0.9), rgba(244, 241, 236, 0.92))",
-            panelBorder: "1px solid rgba(165, 156, 144, 0.42)",
-            panelShadow: "0 14px 30px rgba(126, 119, 108, 0.18)",
-            panelText: "#2d2a26",
-            softBg: "rgba(255, 251, 245, 0.86)",
-            softBorder: "1px solid rgba(171, 163, 152, 0.28)",
-            btnQueryBg: "linear-gradient(135deg, rgba(102, 134, 176, 0.92), rgba(84, 113, 155, 0.92))",
-            btnBorder: "1px solid rgba(127, 119, 109, 0.24)",
-            btnText: "#fffdf9",
-            inputBg: "rgba(255, 254, 250, 0.74)",
-            inputBorder: "1px solid rgba(171, 163, 152, 0.35)",
-            toggleBg: "linear-gradient(145deg, rgba(251, 250, 247, 0.96), rgba(239, 236, 230, 0.94))",
-            toggleText: "#5d6273"
+            panelBg: "rgba(255, 255, 255, 0.9)",
+            panelBorder: "1px solid rgba(0, 0, 0, 0.08)",
+            panelShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
+            panelText: "#374151",
+            softBg: "rgba(0, 0, 0, 0.03)",
+            softBorder: "1px solid rgba(0, 0, 0, 0.06)",
+            btnQueryBg: "#3b82f6",
+            btnQueryHover: "#2563eb",
+            btnBorder: "none",
+            btnText: "#ffffff",
+            inputBg: "#ffffff",
+            inputBorder: "1px solid #d1d5db",
+            toggleBg: "#3b82f6",
+            toggleText: "#ffffff"
         }
     };
     const t = isDark ? theme.dark : theme.light;
@@ -61,32 +63,34 @@
     panel.style.cssText = `
         position: fixed;
         z-index: 99999;
-        right: 420px; /* 与 Manager 错开 */
+        right: 420px;
         top: 70px;
-        width: 720px; /* 调大面板宽度以容纳图表 */
+        width: 720px;
         height: 75vh;
         max-height: 90vh;
         min-width: 400px;
         min-height: 400px;
         display: flex;
         flex-direction: column;
-        backdrop-filter: blur(18px) saturate(120%);
-        border-radius: 20px;
-        padding: 16px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 12px; /* 更符合现代前端框架的圆角 */
+        padding: 20px;
         box-sizing: border-box;
         overflow: hidden;
         will-change: transform, width, height;
-        transition: opacity 0.22s ease;
-        font-family: 'MiSans', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei UI', sans-serif;
+        transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         transform-origin: right top;
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
+        transform: translateY(-10px) scale(0.98);
         background: ${t.panelBg};
         border: ${t.panelBorder};
         box-shadow: ${t.panelShadow};
         color: ${t.panelText};
-        resize: both; /* 允许拖动调整大小 */
+        resize: both;
     `;
 
     // 创建切换按钮
@@ -95,19 +99,19 @@
     toggleBtn.style.cssText = `
         position: fixed;
         z-index: 100000;
-        right: 120px; /* 与 Manager 错开 */
-        bottom: 16px;
-        border-radius: 999px;
-        padding: 9px 13px;
+        right: 120px;
+        bottom: 24px;
+        border-radius: 8px;
+        padding: 10px 16px;
         cursor: pointer;
-        font-size: 12px;
-        font-weight: 700;
-        backdrop-filter: blur(10px);
-        transition: transform 0.2s ease;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        transition: all 0.2s ease;
         background: ${t.toggleBg};
         color: ${t.toggleText};
-        border: 1px solid rgba(164, 156, 145, 0.48);
-        box-shadow: 0 8px 18px rgba(136, 129, 118, 0.2);
+        border: none;
+        box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3), 0 2px 4px -1px rgba(59, 130, 246, 0.2);
     `;
 
     let isOpen = false;
@@ -116,61 +120,65 @@
         panel.style.opacity = isOpen ? "1" : "0";
         panel.style.visibility = isOpen ? "visible" : "hidden";
         panel.style.pointerEvents = isOpen ? "auto" : "none";
+        panel.style.transform = isOpen ? "translateY(0) scale(1)" : "translateY(-10px) scale(0.98)";
     });
 
     // 内部 HTML 结构
     panel.innerHTML = `
-        <div style="font-size: 16px; font-weight: 800; margin-bottom: 12px; display: flex; justify-content: space-between;">
-            <span>📊 S2A 账号用量统计</span>
-            <span style="font-size: 12px; font-weight: normal; opacity: 0.8; cursor:pointer;" id="s2a-stat-auto-token">🔄 尝试自动抓取 Token</span>
+        <div style="font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+            <span>S2A 账号用量分析</span>
+            <span style="font-size: 13px; font-weight: normal; color: #3b82f6; cursor:pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='${t.softBg}'" onmouseout="this.style.background='transparent'" id="s2a-stat-auto-token">🔄 自动抓取 Token</span>
         </div>
         
-        <div style="flex: 1; overflow-y: hidden; display: flex; flex-direction: column; background: ${t.inputBg}; border: ${t.inputBorder}; border-radius: 16px; padding: 12px; min-height: 0;">
+        <div style="flex: 1; overflow-y: hidden; display: flex; flex-direction: column; min-height: 0;">
             <style>
-                .s2a-input { width: 100%; padding: 8px 10px; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; color: ${t.panelText}; font-size: 12px; box-sizing: border-box; outline: none; margin-bottom: 10px;}
-                .s2a-label { font-size: 11px; font-weight: 600; margin-bottom: 4px; display: block; opacity: 0.9; }
-                .s2a-btn-action { padding: 10px 14px; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: 700; transition: transform 0.2s ease; border: ${t.btnBorder}; color: ${t.btnText}; width: 100%; margin-bottom: 10px;}
-                .s2a-btn-action:hover { transform: translateY(-1px); }
+                .s2a-input { width: 100%; padding: 10px 12px; border-radius: 6px; border: ${t.inputBorder}; background: ${t.inputBg}; color: ${t.panelText}; font-size: 13px; box-sizing: border-box; outline: none; margin-bottom: 12px; transition: border-color 0.2s;}
+                .s2a-input:focus { border-color: #3b82f6; }
+                .s2a-label { font-size: 12px; font-weight: 500; margin-bottom: 6px; display: block; color: ${t.panelText}; opacity: 0.8; }
+                .s2a-btn-action { padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background-color 0.2s ease; border: none; color: #ffffff; width: 100%; margin-bottom: 16px;}
                 .s2a-btn-query { background: ${t.btnQueryBg}; }
+                .s2a-btn-query:hover { background: ${t.btnQueryHover}; }
                 
-                .s2a-stat-box { display: flex; justify-content: space-between; background: ${t.softBg}; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: ${t.softBorder}; font-size: 12px;}
-                .s2a-stat-item { display: flex; flex-direction: column; align-items: center; }
-                .s2a-stat-num { font-size: 18px; font-weight: 800; color: #ff4d4f; }
-                .s2a-stat-num.safe { color: #52c41a; }
-                .s2a-stat-num.warn { color: #faad14; }
+                .s2a-stat-box { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 16px;}
+                .s2a-stat-item { flex: 1; display: flex; flex-direction: column; background: ${t.softBg}; padding: 16px 12px; border-radius: 8px; border: ${t.softBorder}; }
+                .s2a-stat-title { font-size: 12px; opacity: 0.7; margin-bottom: 8px; }
+                .s2a-stat-num { font-size: 24px; font-weight: 600; color: ${t.panelText}; line-height: 1; }
+                .s2a-stat-num.danger { color: #ef4444; }
+                .s2a-stat-num.safe { color: #10b981; }
+                .s2a-stat-num.warn { color: #f59e0b; }
                 
-                .s2a-table-container { flex: 1; overflow-y: auto; scrollbar-width: thin; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; margin-bottom: 10px;}
-                .s2a-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
-                .s2a-table th { padding: 8px; background: ${t.softBg}; position: sticky; top: 0; backdrop-filter: blur(10px); z-index: 10; border-bottom: ${t.softBorder}; font-weight: 600; }
-                .s2a-table td { padding: 8px; border-bottom: ${t.softBorder}; }
+                .s2a-table-container { flex: 1; overflow-y: auto; scrollbar-width: thin; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; margin-bottom: 16px;}
+                .s2a-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+                .s2a-table th { padding: 12px 16px; background: ${t.softBg}; position: sticky; top: 0; z-index: 10; font-weight: 500; color: ${t.panelText}; border-bottom: ${t.inputBorder}; }
+                .s2a-table td { padding: 12px 16px; border-bottom: ${t.softBorder}; color: ${t.panelText}; }
                 .s2a-table tr:hover { background: ${t.softBg}; }
 
-                .s2a-chart-container { height: 180px; width: 100%; border-radius: 8px; background: ${t.softBg}; padding: 8px; box-sizing: border-box; border: ${t.softBorder}; }
+                .s2a-chart-container { height: 200px; width: 100%; border-radius: 8px; background: ${t.panelBg}; padding: 12px; box-sizing: border-box; border: ${t.inputBorder}; }
             </style>
             
             <div>
                 <label class="s2a-label">管理员 API Key / Token</label>
                 <input type="password" id="s2a-stat-apiKey" class="s2a-input" placeholder="输入 Admin API Key 或 Bearer Token">
-                <button class="s2a-btn-action s2a-btn-query" id="btn-start-analysis">🚀 开始全量统计与分析</button>
+                <button class="s2a-btn-action s2a-btn-query" id="btn-start-analysis">开始全量统计与分析</button>
             </div>
 
             <!-- 统计摘要 -->
             <div class="s2a-stat-box" id="stat-summary" style="display: none;">
                 <div class="s2a-stat-item">
+                    <span class="s2a-stat-title">总账号数</span>
                     <span class="s2a-stat-num" id="stat-total">0</span>
-                    <span>总账号数</span>
                 </div>
                 <div class="s2a-stat-item">
-                    <span class="s2a-stat-num" id="stat-100">0</span>
-                    <span>100% 用尽</span>
+                    <span class="s2a-stat-title">100% 用尽</span>
+                    <span class="s2a-stat-num danger" id="stat-100">0</span>
                 </div>
                 <div class="s2a-stat-item">
+                    <span class="s2a-stat-title">>80% 高负载</span>
                     <span class="s2a-stat-num warn" id="stat-80">0</span>
-                    <span>>80% 高负载</span>
                 </div>
                 <div class="s2a-stat-item">
+                    <span class="s2a-stat-title">>50% 活跃</span>
                     <span class="s2a-stat-num safe" id="stat-50">0</span>
-                    <span>>50% 活跃</span>
                 </div>
             </div>
 
@@ -179,8 +187,8 @@
                 <table class="s2a-table">
                     <thead>
                         <tr>
-                            <th width="40%">账号 Email/Name</th>
-                            <th width="20%">7天使用率</th>
+                            <th width="40%">账号标识</th>
+                            <th width="20%">使用率</th>
                             <th width="20%">消耗 Tokens</th>
                             <th width="20%">请求次数</th>
                         </tr>
@@ -196,7 +204,7 @@
             </div>
             
             <!-- 进度条/日志 -->
-            <div id="s2a-stat-log" style="margin-top: 10px; font-size: 11px; text-align: center; opacity: 0.8; flex-shrink: 0;">等待开始...</div>
+            <div id="s2a-stat-log" style="margin-top: 12px; font-size: 12px; text-align: center; color: #6b7280; flex-shrink: 0;">等待操作...</div>
         </div>
     `;
 
