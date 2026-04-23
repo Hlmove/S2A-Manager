@@ -383,9 +383,8 @@
                     }
                     
                     completedCount++;
-                    if (completedCount % 5 === 0 || completedCount === totalAccs) {
-                        setLog(`⏳ 正在分析用量进度: ${completedCount} / ${totalAccs} ...`);
-                    }
+                    // 每次完成都实时更新日志（对于 UI 刷新来说性能完全没问题）
+                    setLog(`⏳ 正在分析用量进度: ${completedCount} / ${totalAccs} ...`);
                 });
 
                 // 4. 数据排序 (先按 utilization 降序，再按 tokens 降序)
