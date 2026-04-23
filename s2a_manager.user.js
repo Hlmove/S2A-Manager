@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         S2A Manager (Web Version)
 // @namespace    http://tampermonkey.net/
-// @version      0.5
+// @version      0.6
 // @description  管理 sub2api 的账号、代理与 JSON 转换（CPA 悬浮面板样式）
 // @author       Trae AI
-// @match        *://*/*
+// @match        https://sub.hlmove.cloud/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -579,29 +579,12 @@
     }
 
     function init() {
-        // 探测是否为 sub2api 环境
-        const checkUrl = getBaseUrl() + '/admin/accounts?limit=1';
-        
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: checkUrl,
-            headers: getAuthHeaders(),
-            onload: function(response) {
-                // 只要不是 404，或者能返回正常的 sub2api 格式，就认为是目标站点
-                if (response.status !== 404 && response.status !== 0) {
-                    if (document.readyState === "loading") {
-                        document.addEventListener("DOMContentLoaded", createSidebar, { once: true });
-                    } else {
-                        createSidebar();
-                    }
-                } else {
-                    console.log("[S2A Manager] Not a sub2api environment (404 on /admin/accounts). Script will not load.");
-                }
-            },
-            onerror: function() {
-                console.log("[S2A Manager] Network error while detecting sub2api environment.");
-            }
-        });
+        // 因为已经通过 @match 限定了域名，直接注入面板
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", createSidebar, { once: true });
+        } else {
+            createSidebar();
+        }
     }
 
     init();
