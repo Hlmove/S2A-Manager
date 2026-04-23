@@ -233,30 +233,25 @@
             };
         }
 
-        // 包装 Fetch 为 Promise
-        function s2aFetch(url) {
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
+        // 原生 fetch 请求
+        async function s2aFetch(url) {
+            try {
+                const response = await window.fetch(url, {
                     method: 'GET',
-                    url: url,
                     headers: getAuthHeaders(),
-                    onload: function(response) {
-                        try {
-                            const data = JSON.parse(response.responseText);
-                            if (response.status >= 200 && response.status < 300) {
-                                resolve(data);
-                            } else {
-                                reject(new Error(`HTTP ${response.status}: ${data.message || response.responseText}`));
-                            }
-                        } catch (e) {
-                            reject(new Error(`HTTP ${response.status}: ${response.responseText}`));
-                        }
-                    },
-                    onerror: function(err) {
-                        reject(new Error('Network error: ' + err));
-                    }
+                    mode: 'cors'
                 });
-            });
+                
+                const data = await response.json().catch(() => null);
+                
+                if (response.ok && data) {
+                    return data;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${data ? data.message : response.statusText}`);
+                }
+            } catch (err) {
+                throw new Error('Fetch error: ' + err.message);
+            }
         }
 
         // 自动获取 Token 逻辑
