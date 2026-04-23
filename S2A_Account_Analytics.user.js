@@ -5,6 +5,7 @@
 // @description  统计 sub2api 账号的7天使用率 (Utilization & Tokens) 并生成分析报告
 // @author       Trae AI
 // @match        https://sub.hlmove.cloud/*
+// @require      https://cdn.jsdelivr.net/npm/chart.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -62,8 +63,11 @@
         z-index: 99999;
         right: 420px; /* 与 Manager 错开 */
         top: 70px;
-        width: 600px; /* 调大面板宽度 */
-        max-height: 90vh; /* 增加最大高度 */
+        width: 720px; /* 调大面板宽度以容纳图表 */
+        height: 75vh;
+        max-height: 90vh;
+        min-width: 400px;
+        min-height: 400px;
         display: flex;
         flex-direction: column;
         backdrop-filter: blur(18px) saturate(120%);
@@ -71,18 +75,18 @@
         padding: 16px;
         box-sizing: border-box;
         overflow: hidden;
-        will-change: transform;
-        transition: transform 0.26s ease, opacity 0.22s ease;
+        will-change: transform, width, height;
+        transition: opacity 0.22s ease;
         font-family: 'MiSans', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei UI', sans-serif;
         transform-origin: right top;
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
-        transform: translateX(calc(100% + 24px)) scale(0.985);
         background: ${t.panelBg};
         border: ${t.panelBorder};
         box-shadow: ${t.panelShadow};
         color: ${t.panelText};
+        resize: both; /* 允许拖动调整大小 */
     `;
 
     // 创建切换按钮
@@ -112,7 +116,6 @@
         panel.style.opacity = isOpen ? "1" : "0";
         panel.style.visibility = isOpen ? "visible" : "hidden";
         panel.style.pointerEvents = isOpen ? "auto" : "none";
-        panel.style.transform = isOpen ? "translateX(0) scale(1)" : "translateX(calc(100% + 24px)) scale(0.985)";
     });
 
     // 内部 HTML 结构
@@ -122,7 +125,7 @@
             <span style="font-size: 12px; font-weight: normal; opacity: 0.8; cursor:pointer;" id="s2a-stat-auto-token">🔄 尝试自动抓取 Token</span>
         </div>
         
-        <div style="flex: 1; overflow-y: hidden; display: flex; flex-direction: column; background: ${t.inputBg}; border: ${t.inputBorder}; border-radius: 16px; padding: 12px; height: 600px;">
+        <div style="flex: 1; overflow-y: hidden; display: flex; flex-direction: column; background: ${t.inputBg}; border: ${t.inputBorder}; border-radius: 16px; padding: 12px; min-height: 0;">
             <style>
                 .s2a-input { width: 100%; padding: 8px 10px; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; color: ${t.panelText}; font-size: 12px; box-sizing: border-box; outline: none; margin-bottom: 10px;}
                 .s2a-label { font-size: 11px; font-weight: 600; margin-bottom: 4px; display: block; opacity: 0.9; }
@@ -136,11 +139,13 @@
                 .s2a-stat-num.safe { color: #52c41a; }
                 .s2a-stat-num.warn { color: #faad14; }
                 
-                .s2a-table-container { flex: 1; overflow-y: auto; scrollbar-width: thin; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; }
+                .s2a-table-container { flex: 1; overflow-y: auto; scrollbar-width: thin; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; margin-bottom: 10px;}
                 .s2a-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
                 .s2a-table th { padding: 8px; background: ${t.softBg}; position: sticky; top: 0; backdrop-filter: blur(10px); z-index: 10; border-bottom: ${t.softBorder}; font-weight: 600; }
                 .s2a-table td { padding: 8px; border-bottom: ${t.softBorder}; }
                 .s2a-table tr:hover { background: ${t.softBg}; }
+
+                .s2a-chart-container { height: 180px; width: 100%; border-radius: 8px; background: ${t.softBg}; padding: 8px; box-sizing: border-box; border: ${t.softBorder}; }
             </style>
             
             <div>
@@ -184,9 +189,14 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- 图表容器 -->
+            <div class="s2a-chart-container" id="chart-container" style="display: none;">
+                <canvas id="s2a-chart"></canvas>
+            </div>
             
             <!-- 进度条/日志 -->
-            <div id="s2a-stat-log" style="margin-top: 10px; font-size: 11px; text-align: center; opacity: 0.8;">等待开始...</div>
+            <div id="s2a-stat-log" style="margin-top: 10px; font-size: 11px; text-align: center; opacity: 0.8; flex-shrink: 0;">等待开始...</div>
         </div>
     `;
 
@@ -201,6 +211,7 @@
             log: document.getElementById('s2a-stat-log'),
             summary: document.getElementById('stat-summary'),
             tableContainer: document.getElementById('table-container'),
+            chartContainer: document.getElementById('chart-container'),
             tbody: document.getElementById('s2a-tbody'),
             btnStart: document.getElementById('btn-start-analysis'),
             sTotal: document.getElementById('stat-total'),
@@ -208,6 +219,8 @@
             s80: document.getElementById('stat-80'),
             s50: document.getElementById('stat-50')
         };
+
+        let myChart = null; // 图表实例
 
         function setLog(msg) {
             ui.log.innerText = msg;
@@ -298,6 +311,16 @@
             return Promise.all(ret);
         }
 
+        // 格式化 Tokens 显示 (K, M)
+        function formatTokens(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
         // 开始分析流程
         ui.btnStart.addEventListener('click', async () => {
             if (!ui.apiKey.value.trim()) {
@@ -307,6 +330,7 @@
             ui.btnStart.disabled = true;
             ui.summary.style.display = 'none';
             ui.tableContainer.style.display = 'none';
+            ui.chartContainer.style.display = 'none';
             ui.tbody.innerHTML = '';
             
             try {
@@ -416,7 +440,7 @@
                         <tr>
                             <td style="word-break: break-all;" title="ID: ${item.id}">${item.name}</td>
                             <td style="color: ${colorColor}; font-weight: bold;">${item.error ? '获取失败' : item.utilization + '%'}</td>
-                            <td>${item.tokens.toLocaleString()}</td>
+                            <td title="${item.tokens.toLocaleString()}">${formatTokens(item.tokens)}</td>
                             <td>${item.requests}</td>
                         </tr>
                     `;
@@ -432,6 +456,70 @@
 
                 ui.summary.style.display = 'flex';
                 ui.tableContainer.style.display = 'block';
+                ui.chartContainer.style.display = 'block';
+
+                // 7. 渲染图表 (Chart.js)
+                if (myChart) myChart.destroy();
+                const ctx = document.getElementById('s2a-chart').getContext('2d');
+                
+                // 提取前 20 个高负载账号用于展示，如果总数不够则展示全部
+                const chartData = analyzedData.slice(0, 20);
+                
+                myChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.map(a => a.name.split('@')[0].substring(0, 8) + '..'), // 缩短标签
+                        datasets: [
+                            {
+                                label: '使用率 (%)',
+                                data: chartData.map(a => a.utilization),
+                                backgroundColor: chartData.map(a => 
+                                    a.utilization >= 90 ? 'rgba(255, 77, 79, 0.7)' : 
+                                    (a.utilization > 50 ? 'rgba(250, 173, 20, 0.7)' : 'rgba(82, 196, 26, 0.7)')
+                                ),
+                                borderColor: chartData.map(a => 
+                                    a.utilization >= 90 ? '#ff4d4f' : 
+                                    (a.utilization > 50 ? '#faad14' : '#52c41a')
+                                ),
+                                borderWidth: 1,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Tokens (K)',
+                                data: chartData.map(a => a.tokens / 1000),
+                                type: 'line',
+                                borderColor: '#1890ff',
+                                backgroundColor: '#1890ff',
+                                tension: 0.3,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { display: true, labels: { color: t.panelText, font: { size: 10 } } },
+                            tooltip: { titleFont: { size: 11 }, bodyFont: { size: 11 } }
+                        },
+                        scales: {
+                            x: { ticks: { color: t.panelText, font: { size: 9 }, maxRotation: 45, minRotation: 45 } },
+                            y: { 
+                                type: 'linear', display: true, position: 'left', 
+                                title: { display: true, text: '使用率 %', color: t.panelText, font: { size: 10 } },
+                                max: 100, min: 0,
+                                ticks: { color: t.panelText }
+                            },
+                            y1: { 
+                                type: 'linear', display: true, position: 'right', 
+                                title: { display: true, text: 'Tokens (K)', color: t.panelText, font: { size: 10 } },
+                                grid: { drawOnChartArea: false },
+                                ticks: { color: t.panelText }
+                            }
+                        }
+                    }
+                });
                 
                 setLog(`🎉 分析完成！耗时统计结束。`);
 
