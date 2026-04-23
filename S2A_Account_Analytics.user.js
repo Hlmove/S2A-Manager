@@ -349,7 +349,7 @@
                 let completedCount = 0;
                 const analyzedData = [];
 
-                await asyncPool(10, allAccounts, async (acc) => {
+                await asyncPool(15, allAccounts, async (acc) => {
                     try {
                         const usageRes = await s2aFetch(`https://sub.hlmove.cloud/api/v1/admin/accounts/${acc.id}/usage?timezone=Asia%2FShanghai`);
                         let util = 0, tokens = 0, reqs = 0;
