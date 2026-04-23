@@ -116,31 +116,31 @@
     });
 
     // 内部 HTML 结构
-    panel.innerHTML = \`
+    panel.innerHTML = `
         <div style="font-size: 16px; font-weight: 800; margin-bottom: 12px; display: flex; justify-content: space-between;">
             <span>📊 S2A 账号用量统计</span>
             <span style="font-size: 12px; font-weight: normal; opacity: 0.8; cursor:pointer;" id="s2a-stat-auto-token">🔄 尝试自动抓取 Token</span>
         </div>
         
-        <div style="flex: 1; overflow-y: hidden; display: flex; flex-direction: column; background: \${t.inputBg}; border: \${t.inputBorder}; border-radius: 16px; padding: 12px; height: 500px;">
+        <div style="flex: 1; overflow-y: hidden; display: flex; flex-direction: column; background: ${t.inputBg}; border: ${t.inputBorder}; border-radius: 16px; padding: 12px; height: 500px;">
             <style>
-                .s2a-input { width: 100%; padding: 8px 10px; border-radius: 8px; border: \${t.inputBorder}; background: \${t.panelBg}; color: \${t.panelText}; font-size: 12px; box-sizing: border-box; outline: none; margin-bottom: 10px;}
+                .s2a-input { width: 100%; padding: 8px 10px; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; color: ${t.panelText}; font-size: 12px; box-sizing: border-box; outline: none; margin-bottom: 10px;}
                 .s2a-label { font-size: 11px; font-weight: 600; margin-bottom: 4px; display: block; opacity: 0.9; }
-                .s2a-btn-action { padding: 10px 14px; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: 700; transition: transform 0.2s ease; border: \${t.btnBorder}; color: \${t.btnText}; width: 100%; margin-bottom: 10px;}
+                .s2a-btn-action { padding: 10px 14px; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: 700; transition: transform 0.2s ease; border: ${t.btnBorder}; color: ${t.btnText}; width: 100%; margin-bottom: 10px;}
                 .s2a-btn-action:hover { transform: translateY(-1px); }
-                .s2a-btn-query { background: \${t.btnQueryBg}; }
+                .s2a-btn-query { background: ${t.btnQueryBg}; }
                 
-                .s2a-stat-box { display: flex; justify-content: space-between; background: \${t.softBg}; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: \${t.softBorder}; font-size: 12px;}
+                .s2a-stat-box { display: flex; justify-content: space-between; background: ${t.softBg}; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: ${t.softBorder}; font-size: 12px;}
                 .s2a-stat-item { display: flex; flex-direction: column; align-items: center; }
                 .s2a-stat-num { font-size: 18px; font-weight: 800; color: #ff4d4f; }
                 .s2a-stat-num.safe { color: #52c41a; }
                 .s2a-stat-num.warn { color: #faad14; }
                 
-                .s2a-table-container { flex: 1; overflow-y: auto; scrollbar-width: thin; border-radius: 8px; border: \${t.inputBorder}; background: \${t.panelBg}; }
+                .s2a-table-container { flex: 1; overflow-y: auto; scrollbar-width: thin; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; }
                 .s2a-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
-                .s2a-table th { padding: 8px; background: \${t.softBg}; position: sticky; top: 0; backdrop-filter: blur(10px); z-index: 10; border-bottom: \${t.softBorder}; font-weight: 600; }
-                .s2a-table td { padding: 8px; border-bottom: \${t.softBorder}; }
-                .s2a-table tr:hover { background: \${t.softBg}; }
+                .s2a-table th { padding: 8px; background: ${t.softBg}; position: sticky; top: 0; backdrop-filter: blur(10px); z-index: 10; border-bottom: ${t.softBorder}; font-weight: 600; }
+                .s2a-table td { padding: 8px; border-bottom: ${t.softBorder}; }
+                .s2a-table tr:hover { background: ${t.softBg}; }
             </style>
             
             <div>
@@ -188,7 +188,7 @@
             <!-- 进度条/日志 -->
             <div id="s2a-stat-log" style="margin-top: 10px; font-size: 11px; text-align: center; opacity: 0.8;">等待开始...</div>
         </div>
-    \`;
+    `;
 
     function createSidebar() {
         if (document.getElementById('__s2a_analytics_panel')) return;
@@ -215,7 +215,7 @@
 
         function getAuthHeaders() {
             return {
-                'Authorization': \`Bearer \${ui.apiKey.value.trim()}\`,
+                'Authorization': `Bearer ${ui.apiKey.value.trim()}`,
                 'Content-Type': 'application/json'
             };
         }
@@ -233,10 +233,10 @@
                             if (response.status >= 200 && response.status < 300) {
                                 resolve(data);
                             } else {
-                                reject(new Error(\`HTTP \${response.status}: \${data.message || response.responseText}\`));
+                                reject(new Error(`HTTP ${response.status}: ${data.message || response.responseText}`));
                             }
                         } catch (e) {
-                            reject(new Error(\`HTTP \${response.status}: \${response.responseText}\`));
+                            reject(new Error(`HTTP ${response.status}: ${response.responseText}`));
                         }
                     },
                     onerror: function(err) {
@@ -302,7 +302,7 @@
                 const baseUrl = 'https://sub.hlmove.cloud/api/v1/admin/accounts';
                 const queryParams = '?page_size=50&sort_by=expires_at&sort_order=asc&lite=1&timezone=Asia%2FShanghai';
                 
-                const firstPageData = await s2aFetch(\`\${baseUrl}\${queryParams}&page=1\`);
+                const firstPageData = await s2aFetch(`${baseUrl}${queryParams}&page=1`);
                 if (!firstPageData || !firstPageData.data || !firstPageData.data.items) {
                     throw new Error('无法解析第一页数据结构');
                 }
@@ -317,10 +317,10 @@
                         pagesToFetch.push(i);
                     }
                     
-                    setLog(\`📦 正在并发拉取剩余 \${totalPages - 1} 页账号数据...\`);
+                    setLog(`📦 正在并发拉取剩余 ${totalPages - 1} 页账号数据...`);
                     
                     const pageResults = await asyncPool(5, pagesToFetch, async (page) => {
-                        const res = await s2aFetch(\`\${baseUrl}\${queryParams}&page=\${page}\`);
+                        const res = await s2aFetch(`${baseUrl}${queryParams}&page=${page}`);
                         return res.data.items || [];
                     });
                     
@@ -330,7 +330,7 @@
                 }
 
                 const totalAccs = allAccounts.length;
-                setLog(\`✅ 成功获取到 \${totalAccs} 个账号，开始并发请求用量数据...\`);
+                setLog(`✅ 成功获取到 ${totalAccs} 个账号，开始并发请求用量数据...`);
 
                 // 3. 并发获取所有账号的 usage 数据
                 let completedCount = 0;
@@ -338,7 +338,7 @@
 
                 await asyncPool(10, allAccounts, async (acc) => {
                     try {
-                        const usageRes = await s2aFetch(\`https://sub.hlmove.cloud/api/v1/admin/accounts/\${acc.id}/usage?timezone=Asia%2FShanghai\`);
+                        const usageRes = await s2aFetch(`https://sub.hlmove.cloud/api/v1/admin/accounts/${acc.id}/usage?timezone=Asia%2FShanghai`);
                         let util = 0, tokens = 0, reqs = 0;
                         
                         if (usageRes && usageRes.data && usageRes.data.seven_day) {
@@ -352,16 +352,16 @@
                         
                         analyzedData.push({
                             id: acc.id,
-                            name: acc.name || \`Account #\${acc.id}\`,
+                            name: acc.name || `Account #${acc.id}`,
                             utilization: util,
                             tokens: tokens,
                             requests: reqs
                         });
                     } catch (err) {
-                        console.error(\`Failed to fetch usage for \${acc.id}\`, err);
+                        console.error(`Failed to fetch usage for ${acc.id}`, err);
                         analyzedData.push({
                             id: acc.id,
-                            name: acc.name || \`Account #\${acc.id}\`,
+                            name: acc.name || `Account #${acc.id}`,
                             utilization: 0,
                             tokens: 0,
                             requests: 0,
@@ -371,7 +371,7 @@
                     
                     completedCount++;
                     if (completedCount % 5 === 0 || completedCount === totalAccs) {
-                        setLog(\`⏳ 正在分析用量进度: \${completedCount} / \${totalAccs} ...\`);
+                        setLog(`⏳ 正在分析用量进度: ${completedCount} / ${totalAccs} ...`);
                     }
                 });
 
@@ -400,14 +400,14 @@
                     let colorColor = item.utilization >= 90 ? '#ff4d4f' : (item.utilization > 50 ? '#faad14' : '#52c41a');
                     if(item.error) colorColor = '#999';
 
-                    htmlStr += \`
+                    htmlStr += `
                         <tr>
-                            <td style="word-break: break-all;" title="ID: \${item.id}">\${item.name}</td>
-                            <td style="color: \${colorColor}; font-weight: bold;">\${item.error ? '获取失败' : item.utilization + '%'}</td>
-                            <td>\${item.tokens.toLocaleString()}</td>
-                            <td>\${item.requests}</td>
+                            <td style="word-break: break-all;" title="ID: ${item.id}">${item.name}</td>
+                            <td style="color: ${colorColor}; font-weight: bold;">${item.error ? '获取失败' : item.utilization + '%'}</td>
+                            <td>${item.tokens.toLocaleString()}</td>
+                            <td>${item.requests}</td>
                         </tr>
-                    \`;
+                    `;
                 });
 
                 // 6. 渲染到 UI
@@ -421,10 +421,10 @@
                 ui.summary.style.display = 'flex';
                 ui.tableContainer.style.display = 'block';
                 
-                setLog(\`🎉 分析完成！耗时统计结束。\`);
+                setLog(`🎉 分析完成！耗时统计结束。`);
 
             } catch (e) {
-                setLog(\`❌ 发生错误: \${e.message}\`);
+                setLog(`❌ 发生错误: ${e.message}`);
                 console.error(e);
             } finally {
                 ui.btnStart.disabled = false;
