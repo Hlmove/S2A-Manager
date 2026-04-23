@@ -190,254 +190,253 @@
         </div>
     \`;
 
-    // 注入 DOM
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => {
-            document.body.appendChild(panel);
-            document.body.appendChild(toggleBtn);
-        }, { once: true });
-    } else {
+    function createSidebar() {
+        if (document.getElementById('__s2a_analytics_panel')) return;
         document.body.appendChild(panel);
         document.body.appendChild(toggleBtn);
-    }
-
-    // --------------------------------------------------------
-    // 2. 交互逻辑与核心分析功能
-    // --------------------------------------------------------
-    const ui = {
-        apiKey: document.getElementById('s2a-stat-apiKey'),
-        log: document.getElementById('s2a-stat-log'),
-        summary: document.getElementById('stat-summary'),
-        tableContainer: document.getElementById('table-container'),
-        tbody: document.getElementById('s2a-tbody'),
-        btnStart: document.getElementById('btn-start-analysis'),
-        // 摘要数字
-        sTotal: document.getElementById('stat-total'),
-        s100: document.getElementById('stat-100'),
-        s80: document.getElementById('stat-80'),
-        s50: document.getElementById('stat-50')
-    };
-
-    function setLog(msg) {
-        ui.log.innerText = msg;
-    }
-
-    function getAuthHeaders() {
-        return {
-            'Authorization': \`Bearer \${ui.apiKey.value.trim()}\`,
-            'Content-Type': 'application/json'
+        
+        // 在元素插入 DOM 后再获取它们的引用
+        const ui = {
+            apiKey: document.getElementById('s2a-stat-apiKey'),
+            log: document.getElementById('s2a-stat-log'),
+            summary: document.getElementById('stat-summary'),
+            tableContainer: document.getElementById('table-container'),
+            tbody: document.getElementById('s2a-tbody'),
+            btnStart: document.getElementById('btn-start-analysis'),
+            sTotal: document.getElementById('stat-total'),
+            s100: document.getElementById('stat-100'),
+            s80: document.getElementById('stat-80'),
+            s50: document.getElementById('stat-50')
         };
-    }
 
-    // 包装 Fetch 为 Promise
-    function s2aFetch(url) {
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: url,
-                headers: getAuthHeaders(),
-                onload: function(response) {
-                    try {
-                        const data = JSON.parse(response.responseText);
-                        if (response.status >= 200 && response.status < 300) {
-                            resolve(data);
-                        } else {
-                            reject(new Error(\`HTTP \${response.status}: \${data.message || response.responseText}\`));
+        function setLog(msg) {
+            ui.log.innerText = msg;
+        }
+
+        function getAuthHeaders() {
+            return {
+                'Authorization': \`Bearer \${ui.apiKey.value.trim()}\`,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        // 包装 Fetch 为 Promise
+        function s2aFetch(url) {
+            return new Promise((resolve, reject) => {
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: url,
+                    headers: getAuthHeaders(),
+                    onload: function(response) {
+                        try {
+                            const data = JSON.parse(response.responseText);
+                            if (response.status >= 200 && response.status < 300) {
+                                resolve(data);
+                            } else {
+                                reject(new Error(\`HTTP \${response.status}: \${data.message || response.responseText}\`));
+                            }
+                        } catch (e) {
+                            reject(new Error(\`HTTP \${response.status}: \${response.responseText}\`));
                         }
-                    } catch (e) {
-                        reject(new Error(\`HTTP \${response.status}: \${response.responseText}\`));
+                    },
+                    onerror: function(err) {
+                        reject(new Error('Network error: ' + err));
                     }
-                },
-                onerror: function(err) {
-                    reject(new Error('Network error: ' + err));
-                }
+                });
             });
+        }
+
+        // 自动获取 Token
+        document.getElementById('s2a-stat-auto-token').addEventListener('click', () => {
+            const keys = [
+                'auth_token', 'admin_key', 'management_token', 'management_key', 
+                'tm_token', 'tm_auth_token', 'tm_last_bearer_token_v1'
+            ];
+            let found = null;
+            for (const k of keys) {
+                try {
+                    found = localStorage.getItem(k) || sessionStorage.getItem(k);
+                    if (found && found.trim()) break;
+                } catch(e) {}
+            }
+            if (found) {
+                ui.apiKey.value = found.trim();
+                setLog('✅ 成功提取到 Token。');
+            } else {
+                setLog('⚠️ 未在当前页面找到 Token。');
+            }
+        });
+
+        // 并发控制函数 (限制最大并发数，防止把服务器打挂)
+        async function asyncPool(poolLimit, array, iteratorFn) {
+            const ret = [];
+            const executing = [];
+            for (const item of array) {
+                const p = Promise.resolve().then(() => iteratorFn(item, array));
+                ret.push(p);
+                if (poolLimit <= array.length) {
+                    const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+                    executing.push(e);
+                    if (executing.length >= poolLimit) {
+                        await Promise.race(executing);
+                    }
+                }
+            }
+            return Promise.all(ret);
+        }
+
+        // 开始分析流程
+        ui.btnStart.addEventListener('click', async () => {
+            if (!ui.apiKey.value.trim()) {
+                return setLog('❌ 请先填写或抓取 Admin Token！');
+            }
+
+            ui.btnStart.disabled = true;
+            ui.summary.style.display = 'none';
+            ui.tableContainer.style.display = 'none';
+            ui.tbody.innerHTML = '';
+            
+            try {
+                // 1. 获取第一页并计算总页数
+                setLog('🔍 正在获取账号列表 (第1页)...');
+                const baseUrl = 'https://sub.hlmove.cloud/api/v1/admin/accounts';
+                const queryParams = '?page_size=50&sort_by=expires_at&sort_order=asc&lite=1&timezone=Asia%2FShanghai';
+                
+                const firstPageData = await s2aFetch(\`\${baseUrl}\${queryParams}&page=1\`);
+                if (!firstPageData || !firstPageData.data || !firstPageData.data.items) {
+                    throw new Error('无法解析第一页数据结构');
+                }
+
+                const totalPages = firstPageData.data.pages || 1;
+                let allAccounts = [...firstPageData.data.items];
+
+                // 2. 并发获取剩余所有页的账号
+                if (totalPages > 1) {
+                    const pagesToFetch = [];
+                    for (let i = 2; i <= totalPages; i++) {
+                        pagesToFetch.push(i);
+                    }
+                    
+                    setLog(\`📦 正在并发拉取剩余 \${totalPages - 1} 页账号数据...\`);
+                    
+                    const pageResults = await asyncPool(5, pagesToFetch, async (page) => {
+                        const res = await s2aFetch(\`\${baseUrl}\${queryParams}&page=\${page}\`);
+                        return res.data.items || [];
+                    });
+                    
+                    pageResults.forEach(items => {
+                        allAccounts = allAccounts.concat(items);
+                    });
+                }
+
+                const totalAccs = allAccounts.length;
+                setLog(\`✅ 成功获取到 \${totalAccs} 个账号，开始并发请求用量数据...\`);
+
+                // 3. 并发获取所有账号的 usage 数据
+                let completedCount = 0;
+                const analyzedData = [];
+
+                await asyncPool(10, allAccounts, async (acc) => {
+                    try {
+                        const usageRes = await s2aFetch(\`https://sub.hlmove.cloud/api/v1/admin/accounts/\${acc.id}/usage?timezone=Asia%2FShanghai\`);
+                        let util = 0, tokens = 0, reqs = 0;
+                        
+                        if (usageRes && usageRes.data && usageRes.data.seven_day) {
+                            const sd = usageRes.data.seven_day;
+                            util = sd.utilization || 0;
+                            if (sd.window_stats) {
+                                tokens = sd.window_stats.tokens || 0;
+                                reqs = sd.window_stats.requests || 0;
+                            }
+                        }
+                        
+                        analyzedData.push({
+                            id: acc.id,
+                            name: acc.name || \`Account #\${acc.id}\`,
+                            utilization: util,
+                            tokens: tokens,
+                            requests: reqs
+                        });
+                    } catch (err) {
+                        console.error(\`Failed to fetch usage for \${acc.id}\`, err);
+                        analyzedData.push({
+                            id: acc.id,
+                            name: acc.name || \`Account #\${acc.id}\`,
+                            utilization: 0,
+                            tokens: 0,
+                            requests: 0,
+                            error: true
+                        });
+                    }
+                    
+                    completedCount++;
+                    if (completedCount % 5 === 0 || completedCount === totalAccs) {
+                        setLog(\`⏳ 正在分析用量进度: \${completedCount} / \${totalAccs} ...\`);
+                    }
+                });
+
+                // 4. 数据排序 (先按 utilization 降序，再按 tokens 降序)
+                setLog('🧮 正在统计与排序结果...');
+                analyzedData.sort((a, b) => {
+                    if (b.utilization !== a.utilization) {
+                        return b.utilization - a.utilization;
+                    }
+                    return b.tokens - a.tokens;
+                });
+
+                // 5. 统计整体分析数据
+                let count100 = 0;
+                let count80 = 0; // >80 且 <100
+                let count50 = 0; // >50 且 <=80
+                
+                let htmlStr = '';
+
+                analyzedData.forEach(item => {
+                    if (item.utilization === 100) count100++;
+                    else if (item.utilization > 80 && item.utilization < 100) count80++;
+                    else if (item.utilization > 50 && item.utilization <= 80) count50++;
+
+                    // 生成表格行
+                    let colorColor = item.utilization >= 90 ? '#ff4d4f' : (item.utilization > 50 ? '#faad14' : '#52c41a');
+                    if(item.error) colorColor = '#999';
+
+                    htmlStr += \`
+                        <tr>
+                            <td style="word-break: break-all;" title="ID: \${item.id}">\${item.name}</td>
+                            <td style="color: \${colorColor}; font-weight: bold;">\${item.error ? '获取失败' : item.utilization + '%'}</td>
+                            <td>\${item.tokens.toLocaleString()}</td>
+                            <td>\${item.requests}</td>
+                        </tr>
+                    \`;
+                });
+
+                // 6. 渲染到 UI
+                ui.sTotal.innerText = totalAccs;
+                ui.s100.innerText = count100;
+                ui.s80.innerText = count80;
+                ui.s50.innerText = count50;
+                
+                ui.tbody.innerHTML = htmlStr;
+
+                ui.summary.style.display = 'flex';
+                ui.tableContainer.style.display = 'block';
+                
+                setLog(\`🎉 分析完成！耗时统计结束。\`);
+
+            } catch (e) {
+                setLog(\`❌ 发生错误: \${e.message}\`);
+                console.error(e);
+            } finally {
+                ui.btnStart.disabled = false;
+            }
         });
     }
 
-    // 自动获取 Token
-    document.getElementById('s2a-stat-auto-token').addEventListener('click', () => {
-        const keys = [
-            'auth_token', 'admin_key', 'management_token', 'management_key', 
-            'tm_token', 'tm_auth_token', 'tm_last_bearer_token_v1'
-        ];
-        let found = null;
-        for (const k of keys) {
-            try {
-                found = localStorage.getItem(k) || sessionStorage.getItem(k);
-                if (found && found.trim()) break;
-            } catch(e) {}
-        }
-        if (found) {
-            ui.apiKey.value = found.trim();
-            setLog('✅ 成功提取到 Token。');
-        } else {
-            setLog('⚠️ 未在当前页面找到 Token。');
-        }
-    });
-
-    // 并发控制函数 (限制最大并发数，防止把服务器打挂)
-    async function asyncPool(poolLimit, array, iteratorFn) {
-        const ret = [];
-        const executing = [];
-        for (const item of array) {
-            const p = Promise.resolve().then(() => iteratorFn(item, array));
-            ret.push(p);
-            if (poolLimit <= array.length) {
-                const e = p.then(() => executing.splice(executing.indexOf(e), 1));
-                executing.push(e);
-                if (executing.length >= poolLimit) {
-                    await Promise.race(executing);
-                }
-            }
-        }
-        return Promise.all(ret);
+    // 注入 DOM
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", createSidebar, { once: true });
+    } else {
+        createSidebar();
     }
-
-    // 开始分析流程
-    ui.btnStart.addEventListener('click', async () => {
-        if (!ui.apiKey.value.trim()) {
-            return setLog('❌ 请先填写或抓取 Admin Token！');
-        }
-
-        ui.btnStart.disabled = true;
-        ui.summary.style.display = 'none';
-        ui.tableContainer.style.display = 'none';
-        ui.tbody.innerHTML = '';
-        
-        try {
-            // 1. 获取第一页并计算总页数
-            setLog('🔍 正在获取账号列表 (第1页)...');
-            const baseUrl = 'https://sub.hlmove.cloud/api/v1/admin/accounts';
-            const queryParams = '?page_size=50&sort_by=expires_at&sort_order=asc&lite=1&timezone=Asia%2FShanghai';
-            
-            const firstPageData = await s2aFetch(\`\${baseUrl}\${queryParams}&page=1\`);
-            if (!firstPageData || !firstPageData.data || !firstPageData.data.items) {
-                throw new Error('无法解析第一页数据结构');
-            }
-
-            const totalPages = firstPageData.data.pages || 1;
-            let allAccounts = [...firstPageData.data.items];
-
-            // 2. 并发获取剩余所有页的账号
-            if (totalPages > 1) {
-                const pagesToFetch = [];
-                for (let i = 2; i <= totalPages; i++) {
-                    pagesToFetch.push(i);
-                }
-                
-                setLog(\`📦 正在并发拉取剩余 \${totalPages - 1} 页账号数据...\`);
-                
-                const pageResults = await asyncPool(5, pagesToFetch, async (page) => {
-                    const res = await s2aFetch(\`\${baseUrl}\${queryParams}&page=\${page}\`);
-                    return res.data.items || [];
-                });
-                
-                pageResults.forEach(items => {
-                    allAccounts = allAccounts.concat(items);
-                });
-            }
-
-            const totalAccs = allAccounts.length;
-            setLog(\`✅ 成功获取到 \${totalAccs} 个账号，开始并发请求用量数据...\`);
-
-            // 3. 并发获取所有账号的 usage 数据
-            let completedCount = 0;
-            const analyzedData = [];
-
-            await asyncPool(10, allAccounts, async (acc) => {
-                try {
-                    const usageRes = await s2aFetch(\`https://sub.hlmove.cloud/api/v1/admin/accounts/\${acc.id}/usage?timezone=Asia%2FShanghai\`);
-                    let util = 0, tokens = 0, reqs = 0;
-                    
-                    if (usageRes && usageRes.data && usageRes.data.seven_day) {
-                        const sd = usageRes.data.seven_day;
-                        util = sd.utilization || 0;
-                        if (sd.window_stats) {
-                            tokens = sd.window_stats.tokens || 0;
-                            reqs = sd.window_stats.requests || 0;
-                        }
-                    }
-                    
-                    analyzedData.push({
-                        id: acc.id,
-                        name: acc.name || \`Account #\${acc.id}\`,
-                        utilization: util,
-                        tokens: tokens,
-                        requests: reqs
-                    });
-                } catch (err) {
-                    console.error(\`Failed to fetch usage for \${acc.id}\`, err);
-                    analyzedData.push({
-                        id: acc.id,
-                        name: acc.name || \`Account #\${acc.id}\`,
-                        utilization: 0,
-                        tokens: 0,
-                        requests: 0,
-                        error: true
-                    });
-                }
-                
-                completedCount++;
-                if (completedCount % 5 === 0 || completedCount === totalAccs) {
-                    setLog(\`⏳ 正在分析用量进度: \${completedCount} / \${totalAccs} ...\`);
-                }
-            });
-
-            // 4. 数据排序 (先按 utilization 降序，再按 tokens 降序)
-            setLog('🧮 正在统计与排序结果...');
-            analyzedData.sort((a, b) => {
-                if (b.utilization !== a.utilization) {
-                    return b.utilization - a.utilization;
-                }
-                return b.tokens - a.tokens;
-            });
-
-            // 5. 统计整体分析数据
-            let count100 = 0;
-            let count80 = 0; // >80 且 <100
-            let count50 = 0; // >50 且 <=80
-            
-            let htmlStr = '';
-
-            analyzedData.forEach(item => {
-                if (item.utilization === 100) count100++;
-                else if (item.utilization > 80) count80++;
-                else if (item.utilization > 50) count50++;
-
-                // 生成表格行
-                let colorColor = item.utilization >= 90 ? '#ff4d4f' : (item.utilization > 50 ? '#faad14' : '#52c41a');
-                if(item.error) colorColor = '#999';
-
-                htmlStr += \`
-                    <tr>
-                        <td style="word-break: break-all;" title="ID: \${item.id}">\${item.name}</td>
-                        <td style="color: \${colorColor}; font-weight: bold;">\${item.error ? '获取失败' : item.utilization + '%'}</td>
-                        <td>\${item.tokens.toLocaleString()}</td>
-                        <td>\${item.requests}</td>
-                    </tr>
-                \`;
-            });
-
-            // 6. 渲染到 UI
-            ui.sTotal.innerText = totalAccs;
-            ui.s100.innerText = count100;
-            ui.s80.innerText = count80;
-            ui.s50.innerText = count50;
-            
-            ui.tbody.innerHTML = htmlStr;
-
-            ui.summary.style.display = 'flex';
-            ui.tableContainer.style.display = 'block';
-            
-            setLog(\`🎉 分析完成！耗时统计结束。\`);
-
-        } catch (e) {
-            setLog(\`❌ 发生错误: \${e.message}\`);
-            console.error(e);
-        } finally {
-            ui.btnStart.disabled = false;
-        }
-    });
 
 })();
