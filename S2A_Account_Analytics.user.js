@@ -62,8 +62,8 @@
         z-index: 99999;
         right: 420px; /* 与 Manager 错开 */
         top: 70px;
-        width: 480px;
-        max-height: 85vh;
+        width: 600px; /* 调大面板宽度 */
+        max-height: 90vh; /* 增加最大高度 */
         display: flex;
         flex-direction: column;
         backdrop-filter: blur(18px) saturate(120%);
@@ -122,7 +122,7 @@
             <span style="font-size: 12px; font-weight: normal; opacity: 0.8; cursor:pointer;" id="s2a-stat-auto-token">🔄 尝试自动抓取 Token</span>
         </div>
         
-        <div style="flex: 1; overflow-y: hidden; display: flex; flex-direction: column; background: ${t.inputBg}; border: ${t.inputBorder}; border-radius: 16px; padding: 12px; height: 500px;">
+        <div style="flex: 1; overflow-y: hidden; display: flex; flex-direction: column; background: ${t.inputBg}; border: ${t.inputBorder}; border-radius: 16px; padding: 12px; height: 600px;">
             <style>
                 .s2a-input { width: 100%; padding: 8px 10px; border-radius: 8px; border: ${t.inputBorder}; background: ${t.panelBg}; color: ${t.panelText}; font-size: 12px; box-sizing: border-box; outline: none; margin-bottom: 10px;}
                 .s2a-label { font-size: 11px; font-weight: 600; margin-bottom: 4px; display: block; opacity: 0.9; }
@@ -246,8 +246,8 @@
             });
         }
 
-        // 自动获取 Token
-        document.getElementById('s2a-stat-auto-token').addEventListener('click', () => {
+        // 自动获取 Token 逻辑
+        function autoFetchToken() {
             const keys = [
                 'auth_token', 'admin_key', 'management_token', 'management_key', 
                 'tm_token', 'tm_auth_token', 'tm_last_bearer_token_v1'
@@ -261,11 +261,24 @@
             }
             if (found) {
                 ui.apiKey.value = found.trim();
-                setLog('✅ 成功提取到 Token。');
+                setLog('✅ 已自动提取到当前环境的 Token。');
             } else {
-                setLog('⚠️ 未在当前页面找到 Token。');
+                setLog('⚠️ 未找到 Token，请手动填写。');
+            }
+        }
+
+        // 手动点击按钮获取 Token
+        document.getElementById('s2a-stat-auto-token').addEventListener('click', autoFetchToken);
+        
+        // 面板展开时也自动获取一次
+        toggleBtn.addEventListener("click", () => {
+            if(isOpen && !ui.apiKey.value.trim()) {
+                autoFetchToken();
             }
         });
+
+        // 初始也尝试获取一次
+        autoFetchToken();
 
         // 并发控制函数 (限制最大并发数，防止把服务器打挂)
         async function asyncPool(poolLimit, array, iteratorFn) {
