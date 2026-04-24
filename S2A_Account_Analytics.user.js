@@ -158,12 +158,23 @@
             
             <div>
                 <label class="s2a-label">管理员 API Key / Token</label>
-                <input type="password" id="s2a-stat-apiKey" class="s2a-input" placeholder="输入 Admin API Key 或 Bearer Token">
+                <div style="display: flex; gap: 8px;">
+                    <input type="password" id="s2a-stat-apiKey" class="s2a-input" style="flex: 2; margin-bottom: 12px;" placeholder="输入 Admin API Key 或 Bearer Token">
+                    <select id="s2a-group-filter" class="s2a-input" style="flex: 1; margin-bottom: 12px; cursor: pointer;">
+                        <option value="">全部账号</option>
+                    </select>
+                </div>
                 <button class="s2a-btn-action s2a-btn-query" id="btn-start-analysis">开始全量统计与分析</button>
             </div>
 
+            <!-- 操作按钮栏 -->
+            <div id="action-bar" style="display: none; gap: 8px; margin-bottom: 16px;">
+                <button class="s2a-btn-action" style="background: #ef4444; flex: 1; margin-bottom: 0;" id="btn-disable-error">🚨 停用异常账号 (<span id="count-error">0</span>)</button>
+                <button class="s2a-btn-action" style="background: #f59e0b; flex: 1; margin-bottom: 0;" id="btn-refresh-error">🔄 测活异常账号</button>
+            </div>
+
             <!-- 统计摘要 -->
-            <div class="s2a-stat-box" id="stat-summary" style="display: none;">
+            <div class="s2a-stat-box" id="stat-summary" style="display: none; flex-wrap: wrap;">
                 <div class="s2a-stat-item">
                     <span class="s2a-stat-title">总账号数</span>
                     <span class="s2a-stat-num" id="stat-total">0</span>
@@ -180,6 +191,14 @@
                     <span class="s2a-stat-title">>50% 活跃</span>
                     <span class="s2a-stat-num safe" id="stat-50">0</span>
                 </div>
+                <div class="s2a-stat-item">
+                    <span class="s2a-stat-title" style="color: #ef4444;">异常/报错</span>
+                    <span class="s2a-stat-num danger" id="stat-error">0</span>
+                </div>
+                <div class="s2a-stat-item">
+                    <span class="s2a-stat-title" style="color: #6b7280;">零消耗僵尸</span>
+                    <span class="s2a-stat-num" style="color: #6b7280;" id="stat-zombie">0</span>
+                </div>
             </div>
 
             <!-- 详细列表 -->
@@ -188,7 +207,7 @@
                     <thead>
                         <tr>
                             <th width="40%">账号标识</th>
-                            <th width="20%">使用率</th>
+                            <th width="20%">状态 / 使用率</th>
                             <th width="20%">消耗 Tokens</th>
                             <th width="20%">请求次数</th>
                         </tr>
@@ -199,8 +218,13 @@
             </div>
 
             <!-- 图表容器 -->
-            <div class="s2a-chart-container" id="chart-container" style="display: none;">
-                <canvas id="s2a-chart"></canvas>
+            <div style="display: flex; gap: 12px; height: 200px;" id="chart-wrapper">
+                <div class="s2a-chart-container" id="chart-container" style="display: none; flex: 2;">
+                    <canvas id="s2a-chart"></canvas>
+                </div>
+                <div class="s2a-chart-container" id="pie-chart-container" style="display: none; flex: 1;">
+                    <canvas id="s2a-pie-chart"></canvas>
+                </div>
             </div>
             
             <!-- 进度条/日志 -->
@@ -220,15 +244,25 @@
             summary: document.getElementById('stat-summary'),
             tableContainer: document.getElementById('table-container'),
             chartContainer: document.getElementById('chart-container'),
+            pieChartContainer: document.getElementById('pie-chart-container'),
             tbody: document.getElementById('s2a-tbody'),
             btnStart: document.getElementById('btn-start-analysis'),
             sTotal: document.getElementById('stat-total'),
             s100: document.getElementById('stat-100'),
             s80: document.getElementById('stat-80'),
-            s50: document.getElementById('stat-50')
+            s50: document.getElementById('stat-50'),
+            sError: document.getElementById('stat-error'),
+            sZombie: document.getElementById('stat-zombie'),
+            groupFilter: document.getElementById('s2a-group-filter'),
+            actionBar: document.getElementById('action-bar'),
+            btnDisableError: document.getElementById('btn-disable-error'),
+            btnRefreshError: document.getElementById('btn-refresh-error'),
+            countError: document.getElementById('count-error')
         };
 
         let myChart = null; // 图表实例
+        let myPieChart = null; // 饼图实例
+        let errorAccountIds = []; // 存储异常账号ID
 
         function setLog(msg) {
             ui.log.innerText = msg;
@@ -242,14 +276,17 @@
         }
 
         // 原生 fetch 请求
-        async function s2aFetch(url) {
+        async function s2aFetch(url, method = 'GET', body = null) {
             try {
-                const response = await window.fetch(url, {
-                    method: 'GET',
+                const options = {
+                    method: method,
                     headers: getAuthHeaders(),
                     mode: 'cors'
-                });
-                
+                };
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                const response = await window.fetch(url, options);
                 const data = await response.json().catch(() => null);
                 
                 if (response.ok && data) {
@@ -324,6 +361,88 @@
             return num.toString();
         }
 
+        // 获取分组列表并填充下拉框
+        async function fetchGroups() {
+            if (!ui.apiKey.value.trim()) return;
+            try {
+                const res = await s2aFetch('https://sub.hlmove.cloud/api/v1/admin/groups/all');
+                if (res && res.data) {
+                    const oldVal = ui.groupFilter.value;
+                    ui.groupFilter.innerHTML = '<option value="">全部账号</option>';
+                    res.data.forEach(g => {
+                        const opt = document.createElement('option');
+                        opt.value = g.id;
+                        opt.textContent = g.name;
+                        ui.groupFilter.appendChild(opt);
+                    });
+                    ui.groupFilter.value = oldVal;
+                }
+            } catch(e) {
+                console.error("Fetch groups failed:", e);
+            }
+        }
+
+        ui.apiKey.addEventListener('change', fetchGroups);
+        toggleBtn.addEventListener('click', () => { if(isOpen) fetchGroups(); });
+
+        // 异常账号处理功能
+        ui.btnDisableError.addEventListener('click', async () => {
+            if (!errorAccountIds.length) return;
+            if (!confirm(`确定要停用这 ${errorAccountIds.length} 个异常/报错账号吗？`)) return;
+            
+            ui.btnDisableError.disabled = true;
+            ui.btnRefreshError.disabled = true;
+            setLog(`🔄 正在批量停用 ${errorAccountIds.length} 个账号...`);
+            
+            try {
+                // 方案一：如果有批量更新接口，则使用。这里我们直接使用批量更新 /bulk-update 
+                // 由于我们不完全确定 bulk-update 的结构，最稳妥的是并发 PUT
+                let completed = 0;
+                await asyncPool(5, errorAccountIds, async (id) => {
+                    await s2aFetch(`https://sub.hlmove.cloud/api/v1/admin/accounts/bulk-update`, 'POST', {
+                        account_ids: [id],
+                        status: "disabled"
+                    }).catch(async () => {
+                        // 降级使用 PUT
+                        try {
+                            const accInfo = await s2aFetch(`https://sub.hlmove.cloud/api/v1/admin/accounts/${id}`);
+                            if(accInfo && accInfo.data) {
+                                accInfo.data.status = "disabled";
+                                await s2aFetch(`https://sub.hlmove.cloud/api/v1/admin/accounts/${id}`, 'PUT', accInfo.data);
+                            }
+                        } catch(e) {}
+                    });
+                    completed++;
+                    setLog(`🔄 正在停用进度: ${completed} / ${errorAccountIds.length}`);
+                });
+                
+                setLog(`✅ 成功停用异常账号！请重新点击全量分析。`);
+                ui.btnStart.click(); // 自动刷新
+            } catch(e) {
+                setLog(`❌ 停用失败: ${e.message}`);
+            }
+        });
+
+        ui.btnRefreshError.addEventListener('click', async () => {
+            if (!errorAccountIds.length) return;
+            ui.btnDisableError.disabled = true;
+            ui.btnRefreshError.disabled = true;
+            setLog(`🔄 正在批量强制测活 ${errorAccountIds.length} 个账号...`);
+            
+            try {
+                let completed = 0;
+                await asyncPool(5, errorAccountIds, async (id) => {
+                    await s2aFetch(`https://sub.hlmove.cloud/api/v1/admin/accounts/${id}/test`, 'POST').catch(()=>{});
+                    completed++;
+                    setLog(`🔄 正在测活进度: ${completed} / ${errorAccountIds.length}`);
+                });
+                setLog(`✅ 测活完成！请重新点击全量分析查看最新状态。`);
+                ui.btnStart.click(); // 自动刷新
+            } catch(e) {
+                setLog(`❌ 测活失败: ${e.message}`);
+            }
+        });
+
         // 开始分析流程
         ui.btnStart.addEventListener('click', async () => {
             if (!ui.apiKey.value.trim()) {
@@ -334,13 +453,21 @@
             ui.summary.style.display = 'none';
             ui.tableContainer.style.display = 'none';
             ui.chartContainer.style.display = 'none';
+            ui.pieChartContainer.style.display = 'none';
+            ui.actionBar.style.display = 'none';
             ui.tbody.innerHTML = '';
+            errorAccountIds = [];
             
             try {
                 // 1. 获取第一页并计算总页数
                 setLog('🔍 正在获取账号列表 (第1页)...');
                 const baseUrl = 'https://sub.hlmove.cloud/api/v1/admin/accounts';
-                const queryParams = '?page_size=50&sort_by=expires_at&sort_order=asc&lite=1&timezone=Asia%2FShanghai';
+                let queryParams = '?page_size=50&sort_by=expires_at&sort_order=asc&lite=1&timezone=Asia%2FShanghai';
+                
+                const selectedGroup = ui.groupFilter.value;
+                if (selectedGroup) {
+                    queryParams += `&group=${selectedGroup}`;
+                }
                 
                 const firstPageData = await s2aFetch(`${baseUrl}${queryParams}&page=1`);
                 if (!firstPageData || !firstPageData.data || !firstPageData.data.items) {
@@ -390,22 +517,33 @@
                             }
                         }
                         
+                        const isError = acc.status !== 'active' || acc.error_message;
+                        if (isError) {
+                            errorAccountIds.push(acc.id);
+                        }
+                        
                         analyzedData.push({
                             id: acc.id,
                             name: acc.name || `Account #${acc.id}`,
                             utilization: util,
                             tokens: tokens,
-                            requests: reqs
+                            requests: reqs,
+                            status: acc.status,
+                            errorMessage: acc.error_message || '',
+                            isError: isError
                         });
                     } catch (err) {
                         console.error(`Failed to fetch usage for ${acc.id}`, err);
+                        errorAccountIds.push(acc.id);
                         analyzedData.push({
                             id: acc.id,
                             name: acc.name || `Account #${acc.id}`,
                             utilization: 0,
                             tokens: 0,
                             requests: 0,
-                            error: true
+                            status: acc.status || 'unknown',
+                            errorMessage: 'Failed to fetch usage',
+                            isError: true
                         });
                     }
                     
@@ -417,9 +555,9 @@
                 // 4. 数据排序 (先按 utilization 降序，再按 tokens 降序)
                 setLog('🧮 正在统计与排序结果...');
                 analyzedData.sort((a, b) => {
-                    if (b.utilization !== a.utilization) {
-                        return b.utilization - a.utilization;
-                    }
+                    if (a.isError && !b.isError) return -1; // 报错账号排最前面
+                    if (!a.isError && b.isError) return 1;
+                    if (b.utilization !== a.utilization) return b.utilization - a.utilization;
                     return b.tokens - a.tokens;
                 });
 
@@ -427,6 +565,7 @@
                 let count100 = 0;
                 let count80 = 0; // >80 且 <100
                 let count50 = 0; // >50 且 <=80
+                let countZombie = 0; // tokens = 0 且无报错
                 
                 let htmlStr = '';
 
@@ -434,15 +573,24 @@
                     if (item.utilization === 100) count100++;
                     else if (item.utilization > 80 && item.utilization < 100) count80++;
                     else if (item.utilization > 50 && item.utilization <= 80) count50++;
+                    
+                    if (item.tokens === 0 && !item.isError) countZombie++;
 
                     // 生成表格行
-                    let colorColor = item.utilization >= 90 ? '#ff4d4f' : (item.utilization > 50 ? '#faad14' : '#52c41a');
-                    if(item.error) colorColor = '#999';
+                    let colorColor = item.utilization >= 90 ? '#ef4444' : (item.utilization > 50 ? '#f59e0b' : '#10b981');
+                    let statusLabel = item.utilization + '%';
+                    
+                    if (item.isError) {
+                        colorColor = '#ef4444';
+                        statusLabel = `异常: ${item.status}`;
+                    } else if (item.tokens === 0) {
+                        colorColor = '#6b7280'; // 灰色僵尸
+                    }
 
                     htmlStr += `
                         <tr>
-                            <td style="word-break: break-all;" title="ID: ${item.id}">${item.name}</td>
-                            <td style="color: ${colorColor}; font-weight: bold;">${item.error ? '获取失败' : item.utilization + '%'}</td>
+                            <td style="word-break: break-all;" title="${item.errorMessage || item.name}">${item.name}</td>
+                            <td style="color: ${colorColor}; font-weight: bold;" title="${item.errorMessage}">${statusLabel}</td>
                             <td title="${item.tokens.toLocaleString()}">${formatTokens(item.tokens)}</td>
                             <td>${item.requests}</td>
                         </tr>
@@ -454,6 +602,13 @@
                 ui.s100.innerText = count100;
                 ui.s80.innerText = count80;
                 ui.s50.innerText = count50;
+                ui.sError.innerText = errorAccountIds.length;
+                ui.sZombie.innerText = countZombie;
+                
+                ui.countError.innerText = errorAccountIds.length;
+                if (errorAccountIds.length > 0) {
+                    ui.actionBar.style.display = 'flex';
+                }
                 
                 ui.tbody.innerHTML = htmlStr;
 
@@ -465,7 +620,7 @@
                 if (myChart) myChart.destroy();
                 const ctx = document.getElementById('s2a-chart').getContext('2d');
                 
-                // 提取前 20 个高负载账号用于展示，如果总数不够则展示全部
+                // 提取前 20 个账号用于柱状图展示
                 const chartData = analyzedData.slice(0, 20);
                 
                 myChart = new Chart(ctx, {
@@ -477,12 +632,10 @@
                                 label: '使用率 (%)',
                                 data: chartData.map(a => a.utilization),
                                 backgroundColor: chartData.map(a => 
-                                    a.utilization >= 90 ? 'rgba(255, 77, 79, 0.7)' : 
-                                    (a.utilization > 50 ? 'rgba(250, 173, 20, 0.7)' : 'rgba(82, 196, 26, 0.7)')
+                                    a.isError ? 'rgba(239, 68, 68, 0.7)' : (a.utilization >= 90 ? 'rgba(239, 68, 68, 0.7)' : (a.utilization > 50 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(16, 185, 129, 0.7)'))
                                 ),
                                 borderColor: chartData.map(a => 
-                                    a.utilization >= 90 ? '#ff4d4f' : 
-                                    (a.utilization > 50 ? '#faad14' : '#52c41a')
+                                    a.isError ? '#ef4444' : (a.utilization >= 90 ? '#ef4444' : (a.utilization > 50 ? '#f59e0b' : '#10b981'))
                                 ),
                                 borderWidth: 1,
                                 yAxisID: 'y'
@@ -491,8 +644,8 @@
                                 label: 'Tokens (K)',
                                 data: chartData.map(a => a.tokens / 1000),
                                 type: 'line',
-                                borderColor: '#1890ff',
-                                backgroundColor: '#1890ff',
+                                borderColor: '#3b82f6',
+                                backgroundColor: '#3b82f6',
                                 tension: 0.3,
                                 yAxisID: 'y1'
                             }
@@ -520,6 +673,53 @@
                                 grid: { drawOnChartArea: false },
                                 ticks: { color: t.panelText }
                             }
+                        }
+                    }
+                });
+
+                // 8. 绘制分组饼图
+                if (myPieChart) myPieChart.destroy();
+                ui.pieChartContainer.style.display = 'block';
+                const ctxPie = document.getElementById('s2a-pie-chart').getContext('2d');
+                
+                // 统计每个分组的账号数
+                const groupCount = {};
+                let noGroupCount = 0;
+                allAccounts.forEach(acc => {
+                    if (acc.groups && acc.groups.length > 0) {
+                        acc.groups.forEach(g => {
+                            groupCount[g.name] = (groupCount[g.name] || 0) + 1;
+                        });
+                    } else {
+                        noGroupCount++;
+                    }
+                });
+                
+                const pieLabels = Object.keys(groupCount);
+                const pieData = Object.values(groupCount);
+                if (noGroupCount > 0) {
+                    pieLabels.push('未分组');
+                    pieData.push(noGroupCount);
+                }
+
+                myPieChart = new Chart(ctxPie, {
+                    type: 'doughnut',
+                    data: {
+                        labels: pieLabels,
+                        datasets: [{
+                            data: pieData,
+                            backgroundColor: [
+                                '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#6b7280'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right', labels: { color: t.panelText, font: { size: 10 }, boxWidth: 10 } },
+                            tooltip: { titleFont: { size: 11 }, bodyFont: { size: 11 } }
                         }
                     }
                 });
